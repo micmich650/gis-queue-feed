@@ -1,0 +1,21 @@
+[project]
+name = "gis-queue-feed"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Mike Michelini", email = "micmich@umich.edu" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "openpyxl>=3.1.5",
+    "pandas>=3.1.1",
+    "requests>=2.34.2",
+]
+
+[project.scripts]
+gis-queue-feed = "gis_queue_feed:main"
+
+[build-system]
+requires = ["uv_build>=0.13.8,<0.14.0"]
+build-backend = "uv_build"

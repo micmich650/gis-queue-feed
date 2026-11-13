@@ -1,8 +1,12 @@
-import requests
+import time
 from pathlib import Path
 
+import requests
+
 LIST_URL = "https://www.ercot.com/misapp/servlets/IceDocListJsonWS"
+DOWNLOAD_URL = "https://www.ercot.com/misdownload/servlets/mirDownload"
 HEADERS = {"User-Agent": "gis-queue-feed (personal learning project)"}
+RAW_DIR = Path("data/raw")
 
 
 def list_documents():
@@ -18,22 +22,18 @@ def list_documents():
     return [entry["Document"] for entry in entries]
 
 
-documents = list_documents()
-print(len(documents), "documents")
-
-for doc in documents[:15]:
-    print(doc["PublishDate"][:10], doc["DocID"], doc["FriendlyName"])
-
-
-DOWNLOAD_URL = "https://www.ercot.com/misdownload/servlets/mirDownload"
-RAW_DIR = Path("data/raw")
-
-
 def keep_gis_reports(documents):
     return [doc for doc in documents if doc["FriendlyName"].startswith("GIS_Report")]
 
 
 def download(doc):
+    filename = f"{doc['PublishDate'][:10]}_{doc['DocID']}_{doc['FriendlyName']}.xlsx"
+    path = RAW_DIR / filename
+
+    if path.exists():
+        print("Already downloaded, skipping:", filename)
+        return path
+
     response = requests.get(
         DOWNLOAD_URL,
         params={"doclookupId": doc["DocID"]},
@@ -43,15 +43,15 @@ def download(doc):
     response.raise_for_status()
 
     RAW_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"{doc['PublishDate'][:10]}_{doc['DocID']}_{doc['FriendlyName']}.xlsx"
-    path = RAW_DIR / filename
     path.write_bytes(response.content)
+    print("Downloaded:", filename)
+    time.sleep(2)
     return path
 
 
-gis_reports = keep_gis_reports(documents)
-print(len(gis_reports), "GIS reports")
+if __name__ == "__main__":
+    gis_reports = keep_gis_reports(list_documents())
+    print(len(gis_reports), "GIS reports available")
 
-latest = gis_reports[0]
-saved_to = download(latest)
-print("Saved:", saved_to)
+    for doc in gis_reports[:3]:
+        download(doc)

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import psycopg
 
-from parse import parse
+from parse import parse, parse_events
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql://queue:queue@localhost:5432/queue"
@@ -43,6 +43,14 @@ SCHEMA = [
         PRIMARY KEY (doc_id, project_id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS project_events (
+        doc_id     TEXT NOT NULL REFERENCES files (doc_id),
+        project_id TEXT NOT NULL,
+        event      TEXT NOT NULL,
+        PRIMARY KEY (doc_id, project_id, event)
+    )
+    """
 ]
 
 
@@ -84,6 +92,12 @@ def load_file(conn, path):
         )
         with conn.cursor() as cur:
             cur.executemany(insert_sql, df.itertuples(index=False, name=None))
+            events = parse_events(path)
+            events.insert(0, "doc_id", doc_id)
+            cur.executemany(
+                "INSERT INTO project_events (doc_id, project_id, event) VALUES (%s, %s, %s)",
+                events.itertuples(index=False, name=None),
+            )
 
     return len(df)
 

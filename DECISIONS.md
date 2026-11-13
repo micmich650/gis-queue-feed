@@ -59,3 +59,16 @@
   Grid Status uses and it has real DATE and NUMERIC types.
 - Planning `NUMERIC` for capacity instead of a float, so decimals are
   stored exactly and don't create fake capacity changes between months.
+- Two tables: `files` (one row per report) and `projects` (one row per
+  project per report). Keeping a snapshot per month is what makes
+  comparing months possible.
+- `projects` has a composite primary key (doc_id, project_id): a project
+  can appear once per file, never twice in the same file.
+- `doc_id` references `files`, so every project row records its source file.
+- Each file is loaded in one transaction: the file row and all project rows
+  are saved together or not at all. A crash halfway can't leave a file
+  marked as loaded with missing projects.
+- Re-running is safe: files already in `files` are skipped.
+- Values are passed with `%s` placeholders, never pasted into SQL text.
+- The connection string comes from the DATABASE_URL environment variable,
+  with a local default.

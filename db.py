@@ -75,8 +75,8 @@ SCHEMA = [
 ]
 
 
-def connect():
-    conn = psycopg.connect(DATABASE_URL, autocommit=True)
+def connect(url=None):
+    conn = psycopg.connect(url or DATABASE_URL, autocommit=True)
     with conn.transaction():
         for statement in SCHEMA:
             conn.execute(statement)
@@ -154,7 +154,7 @@ if __name__ == "__main__":
             count = load_file(conn, path)
             if count:
                 print(f"{path.name}: {count} rows loaded")
-        except Exception as error: # noqa: BLE001 - any failure quarantines the file
+        except Exception as error:  # noqa: BLE001 - any failure quarantines the file
             quarantine(conn, path, str(error))
             print(f"QUARANTINED {path.name}: {error}")
 

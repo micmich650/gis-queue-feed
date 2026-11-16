@@ -147,3 +147,10 @@
   nothing in quarantine.
 - Finding: the queue grew from 788 to a peak of 1,881 (July 2025) and has
   shrunk since; removals have regularly outnumbered additions since late 2025.
+
+## Code quality
+- Ruff for linting and formatting. Accepted its suggestions (pairwise, max)
+  except one: the main loop deliberately catches all exceptions so any
+  failure quarantines the file; marked with a noqa comment explaining why.
+- Ruff's suggestion on the newest-file lookup also revealed that parse.py's
+  demo didn't skip Excel lock files; fixed.

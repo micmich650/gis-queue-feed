@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pandas as pd
 
-SHEET = "Project Details - Large Gen"
+PROJECT_SHEETS = ["Project Details - Large Gen", "Project Details"]
+COLUMN_ALIASES = {"GINR Study Phase": "GIM Study Phase"}
 
 COLUMNS = {
     "INR": "project_id",
@@ -27,10 +28,20 @@ def find_header_row(path, sheet):
         raise ValueError(f"No 'INR' header row found in sheet '{sheet}' of {path}")
     return matches[0]
 
+def pick_sheet(path):
+    available = pd.ExcelFile(path).sheet_names
+    for sheet in PROJECT_SHEETS:
+        if sheet in available:
+            return sheet
+    raise ValueError(f"No project sheet found; sheets are {available}")
 
-def parse(path, sheet=SHEET):
+
+def parse(path, sheet=None):
+    if sheet is None:
+        sheet = pick_sheet(path)
     header_row = find_header_row(path, sheet)
     df = pd.read_excel(path, sheet_name=sheet, header=header_row)
+    df = df.rename(columns=COLUMN_ALIASES)
 
     missing = [col for col in COLUMNS if col not in df.columns]
     if missing:
@@ -74,6 +85,10 @@ def validate(df):
 
     return problems
 
+def sheet_says_none(path, sheet):
+    raw = pd.read_excel(path, sheet_name=sheet, header=None)
+    return raw[0].astype(str).str.startswith("No ").any()
+
 EVENT_SHEETS = {
     "Cancellation Update": "cancelled",
     "Inactive Projects": "inactive",
@@ -84,7 +99,12 @@ EVENT_SHEETS = {
 def parse_events(path):
     frames = []
     for sheet, event in EVENT_SHEETS.items():
-        header_row = find_header_row(path, sheet)
+        try:
+            header_row = find_header_row(path, sheet)
+        except ValueError:
+            if sheet_says_none(path, sheet):
+                continue
+            raise
         df = pd.read_excel(path, sheet_name=sheet, header=header_row)
         df = df.dropna(subset=["INR"])
         frames.append(
@@ -92,6 +112,9 @@ def parse_events(path):
                 {"project_id": df["INR"].astype(str).str.strip(), "event": event}
             )
         )
+
+    if not frames:
+        return pd.DataFrame(columns=["project_id", "event"])
     return pd.concat(frames, ignore_index=True).drop_duplicates(ignore_index=True)
 
 

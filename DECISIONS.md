@@ -106,3 +106,44 @@
   both Aug->Sep and Sep->Oct.
 - First finding: in October, 117 projects' dates were pushed later and only
   4 moved earlier.
+
+## Validation and quarantine
+- parse() raises a clear error listing any missing columns.
+- validate() checks: at least 100 projects, no duplicate IDs, capacity is
+  numeric, date columns are dates. It deliberately doesn't reject negative
+  MW or unusual IDs (both are legitimate in ERCOT's data).
+- Files that fail go to a `quarantine` table with the reason. The run
+  continues with the other files instead of crashing.
+- Quarantine uses an upsert (ON CONFLICT DO UPDATE), so re-runs update the
+  reason instead of duplicating it. A file that later loads successfully is
+  removed from quarantine in the same transaction.
+- The main loop catches any exception on purpose: at the top level of a
+  pipeline, recording a failure is better than crashing.
+- Tested with a copy of a real file with a renamed column.
+
+## Backfill scope
+- Loaded every GIS report. Reports from Feb 2022 onward (new layout) load
+  cleanly. Reports from Oct 2019 to Jan 2022 use an older layout.
+- Handled in the parser: old sheet name ("Project Details"), renamed column
+  ("GINR Study Phase"), and "no events this month" notes in event sheets.
+- Not supported (scoped out): 19 old files have dates stored as text; six old
+  reports share one publish date (2020-06-29), so publish date can't order
+  them; there are revised/corrected re-publications of the same month; and
+  there are gaps between reports.
+- The format boundary itself is consistent: 761 projects (Jan 2022) -> 788
+  (Feb 2022), so the two formats count projects the same way.
+- Decision: compare months from Feb 2022 onward (nearly 5 years). Supporting
+  older reports needs ordering by report month parsed from inconsistent file
+  names; that's the documented next step.
+  - Scope is enforced in code: files published before 2022-03-01 are skipped
+  and logged as "out of scope", not quarantined.
+- Corrections: a file published within 15 days of the previous one replaces
+  it in comparisons. This caught April 2022 and June 2023 corrections.
+  It's a heuristic based on monthly spacing; the alternative is parsing the
+  report month from inconsistent file names.
+- change_events is rebuilt from scratch on every run, since it's fully
+  derived from `projects`. A late correction can't leave stale comparisons.
+- Result: 57 months (Feb 2022 - Oct 2026), 56 comparisons, 86,952 project rows,
+  nothing in quarantine.
+- Finding: the queue grew from 788 to a peak of 1,881 (July 2025) and has
+  shrunk since; removals have regularly outnumbered additions since late 2025.

@@ -9,6 +9,8 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql://queue:queue@localhost:5432/queue"
 )
 
+FIRST_SUPPORTED = "2022-03-01"
+
 DATE_COLUMNS = [
     "projected_cod",
     "ia_signed",
@@ -141,10 +143,13 @@ def quarantine(conn, path, reason):
 
 if __name__ == "__main__":
     files = sorted(
-        p for p in Path("data/raw").glob("*.xlsx") if not p.name.startswith("~$")
+        p for p in Path("data/raw").glob("*.xls*") if not p.name.startswith("~$")
     )
     conn = connect()
     for path in files:
+        if path.name[:10] < FIRST_SUPPORTED:
+            print("Out of scope (old format), skipping:", path.name)
+            continue
         try:
             count = load_file(conn, path)
             if count:

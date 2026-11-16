@@ -72,9 +72,22 @@ CHANGE_QUERIES = {
 }
 
 
+CORRECTION_WINDOW_DAYS = 15
+
+
 def file_pairs(conn):
-    rows = conn.execute("SELECT doc_id FROM files ORDER BY publish_date").fetchall()
-    doc_ids = [row[0] for row in rows]
+    rows = conn.execute(
+        "SELECT doc_id, publish_date FROM files ORDER BY publish_date, doc_id"
+    ).fetchall()
+
+    kept = []
+    for doc_id, publish_date in rows:
+        if kept and (publish_date - kept[-1][1]).days < CORRECTION_WINDOW_DAYS:
+            kept[-1] = (doc_id, publish_date)
+        else:
+            kept.append((doc_id, publish_date))
+
+    doc_ids = [doc_id for doc_id, _ in kept]
     return list(zip(doc_ids, doc_ids[1:]))
 
 
@@ -91,6 +104,7 @@ def detect_changes(conn, prev, cur):
 
 if __name__ == "__main__":
     conn = connect()
+    conn.execute("DELETE FROM change_events")
     for prev, cur in file_pairs(conn):
         detect_changes(conn, prev, cur)
         print("Compared", prev, "->", cur)

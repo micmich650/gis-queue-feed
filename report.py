@@ -78,6 +78,7 @@ def summary_lines(conn, prev, cur):
         lines.append(f"| {label} | {counts.get(change_type, 0)} |")
     return lines
 
+
 def cell(value):
     return "" if value is None else str(value)
 

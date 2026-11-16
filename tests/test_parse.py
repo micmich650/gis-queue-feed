@@ -48,7 +48,14 @@ def test_finds_header_below_title_rows(tmp_path):
     path = tmp_path / "report.xlsx"
     write_workbook(
         path,
-        {"Project Details - Large Gen": [["A title"], [None], HEADER, project_row("26INR0001")]},
+        {
+            "Project Details - Large Gen": [
+                ["A title"],
+                [None],
+                HEADER,
+                project_row("26INR0001"),
+            ]
+        },
     )
 
     assert find_header_row(path, "Project Details - Large Gen") == 2
@@ -58,7 +65,13 @@ def test_finds_header_when_inr_is_not_first_column(tmp_path):
     path = tmp_path / "report.xlsx"
     write_workbook(
         path,
-        {"Commissioning Update": [["A title"], ["Category", "INR", "Project Name"], ["X", "26INR0001", "A"]]},
+        {
+            "Commissioning Update": [
+                ["A title"],
+                ["Category", "INR", "Project Name"],
+                ["X", "26INR0001", "A"],
+            ]
+        },
     )
 
     assert find_header_row(path, "Commissioning Update") == 1
@@ -67,7 +80,11 @@ def test_finds_header_when_inr_is_not_first_column(tmp_path):
 def test_missing_column_raises_clear_error(tmp_path):
     path = tmp_path / "report.xlsx"
     header = [col for col in HEADER if col != "Capacity (MW)"]
-    row = [value for col, value in zip(HEADER, project_row("26INR0001")) if col != "Capacity (MW)"]
+    row = [
+        value
+        for col, value in zip(HEADER, project_row("26INR0001"))
+        if col != "Capacity (MW)"
+    ]
     write_workbook(path, {"Project Details - Large Gen": [header, row]})
 
     with pytest.raises(ValueError, match="Capacity"):
@@ -76,7 +93,9 @@ def test_missing_column_raises_clear_error(tmp_path):
 
 def test_old_format_sheet_and_column_names(tmp_path):
     path = tmp_path / "report.xlsx"
-    old_header = ["GINR Study Phase" if col == "GIM Study Phase" else col for col in HEADER]
+    old_header = [
+        "GINR Study Phase" if col == "GIM Study Phase" else col for col in HEADER
+    ]
     write_workbook(path, {"Project Details": [old_header, project_row("20INR0001")]})
 
     df = parse(path)
@@ -90,7 +109,10 @@ def test_no_cancellations_note_means_no_events(tmp_path):
     write_workbook(
         path,
         {
-            "Cancellation Update": [["Projects Cancelled"], ["No cancelled projects during the month"]],
+            "Cancellation Update": [
+                ["Projects Cancelled"],
+                ["No cancelled projects during the month"],
+            ],
             "Inactive Projects": event_table,
             "Commissioning Update": event_table,
         },

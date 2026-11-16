@@ -1,4 +1,7 @@
+from itertools import pairwise
+
 from db import connect
+
 
 CHANGE_QUERIES = {
     "added": """
@@ -88,7 +91,7 @@ def file_pairs(conn):
             kept.append((doc_id, publish_date))
 
     doc_ids = [doc_id for doc_id, _ in kept]
-    return list(zip(doc_ids, doc_ids[1:]))
+    return list(pairwise(doc_ids))
 
 
 def detect_changes(conn, prev, cur):

@@ -8,10 +8,13 @@ DOWNLOAD_URL = "https://www.ercot.com/misdownload/servlets/mirDownload"
 HEADERS = {"User-Agent": "gis-queue-feed (personal learning project)"}
 RAW_DIR = Path("data/raw")
 
+
 def get_with_retries(url, params, timeout, attempts=3):
     for attempt in range(1, attempts + 1):
         try:
-            response = requests.get(url, params=params, headers=HEADERS, timeout=timeout)
+            response = requests.get(
+                url, params=params, headers=HEADERS, timeout=timeout
+            )
             response.raise_for_status()
             return response
         except requests.RequestException as error:

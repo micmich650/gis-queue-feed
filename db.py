@@ -71,7 +71,7 @@ SCHEMA = [
         reason         TEXT NOT NULL,
         quarantined_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
-    """
+    """,
 ]
 
 
@@ -82,10 +82,9 @@ def connect():
             conn.execute(statement)
     return conn
 
+
 def already_loaded(conn, doc_id):
-    row = conn.execute(
-        "SELECT 1 FROM files WHERE doc_id = %s", (doc_id,)
-    ).fetchone()
+    row = conn.execute("SELECT 1 FROM files WHERE doc_id = %s", (doc_id,)).fetchone()
     return row is not None
 
 
@@ -101,7 +100,7 @@ def load_file(conn, path):
     problems = validate(df)
     if problems:
         raise ValueError("; ".join(problems))
-    
+
     for col in DATE_COLUMNS:
         df[col] = df[col].dt.date
     df = df.astype(object).where(df.notna(), None)
@@ -127,6 +126,7 @@ def load_file(conn, path):
             )
 
     return len(df)
+
 
 def quarantine(conn, path, reason):
     _, doc_id, _ = path.stem.split("_", 2)

@@ -28,6 +28,7 @@ def find_header_row(path, sheet):
         raise ValueError(f"No 'INR' header row found in sheet '{sheet}' of {path}")
     return matches[0]
 
+
 def pick_sheet(path):
     available = pd.ExcelFile(path).sheet_names
     for sheet in PROJECT_SHEETS:
@@ -57,6 +58,7 @@ def parse(path, sheet=None):
 
     return df
 
+
 MIN_ROWS = 100
 DATE_COLUMNS = [
     "projected_cod",
@@ -85,9 +87,11 @@ def validate(df):
 
     return problems
 
+
 def sheet_says_none(path, sheet):
     raw = pd.read_excel(path, sheet_name=sheet, header=None)
     return raw[0].astype(str).str.startswith("No ").any()
+
 
 EVENT_SHEETS = {
     "Cancellation Update": "cancelled",
@@ -119,7 +123,9 @@ def parse_events(path):
 
 
 if __name__ == "__main__":
-    path = sorted(Path("data/raw").glob("*.xlsx"))[-1]
+    path = max(
+        p for p in Path("data/raw").glob("*.xlsx") if not p.name.startswith("~$")
+    )
     projects = parse(path)
     events = parse_events(path)
     print(events["event"].value_counts())

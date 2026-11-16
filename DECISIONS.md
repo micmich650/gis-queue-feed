@@ -91,3 +91,18 @@
   fix this properly.
 - The Large Gen sheet uses fuel codes (SOL, WIN, ...), while the event sheets
   use full names. The report will need a mapping.
+
+## Change detection
+- All change types are saved to one `change_events` table, with old and
+  new values stored as text so one table fits dates, statuses and numbers.
+  Trade-off: no date math directly on those columns.
+- Each comparison deletes its previous results and re-inserts them in one
+  transaction, so re-running is safe and picks up query improvements.
+- Months are paired automatically (each file with the next by publish date).
+- IS DISTINCT FROM is used instead of <> so changes to or from NULL aren't missed.
+- A removed project's reasons are combined with STRING_AGG, so a project on
+  two event sheets still gets exactly one row.
+- Reconciliation: previous total - removed + added = current total, for
+  both Aug->Sep and Sep->Oct.
+- First finding: in October, 117 projects' dates were pushed later and only
+  4 moved earlier.

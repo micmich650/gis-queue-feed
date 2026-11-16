@@ -32,6 +32,10 @@ def parse(path, sheet=SHEET):
     header_row = find_header_row(path, sheet)
     df = pd.read_excel(path, sheet_name=sheet, header=header_row)
 
+    missing = [col for col in COLUMNS if col not in df.columns]
+    if missing:
+        raise ValueError(f"Missing columns: {missing}")
+
     df = df[list(COLUMNS)]
     df = df.rename(columns=COLUMNS)
 
@@ -41,6 +45,34 @@ def parse(path, sheet=SHEET):
         df[col] = df[col].str.strip()
 
     return df
+
+MIN_ROWS = 100
+DATE_COLUMNS = [
+    "projected_cod",
+    "ia_signed",
+    "approved_energization",
+    "approved_synchronization",
+]
+
+
+def validate(df):
+    problems = []
+
+    if len(df) < MIN_ROWS:
+        problems.append(f"only {len(df)} projects (expected at least {MIN_ROWS})")
+
+    duplicates = df["project_id"].duplicated().sum()
+    if duplicates:
+        problems.append(f"{duplicates} duplicate project IDs")
+
+    if not pd.api.types.is_numeric_dtype(df["capacity_mw"]):
+        problems.append("capacity_mw is not numeric")
+
+    for col in DATE_COLUMNS:
+        if not pd.api.types.is_datetime64_any_dtype(df[col]):
+            problems.append(f"{col} is not a date column")
+
+    return problems
 
 EVENT_SHEETS = {
     "Cancellation Update": "cancelled",

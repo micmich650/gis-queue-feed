@@ -3,7 +3,7 @@ from pathlib import Path
 
 import psycopg
 
-from parse import parse, parse_events
+from parse import parse, parse_events, validate
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql://queue:queue@localhost:5432/queue"
@@ -61,6 +61,14 @@ SCHEMA = [
         new_value   TEXT,
         PRIMARY KEY (prev_doc_id, cur_doc_id, project_id, change_type)
     )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS quarantine (
+        doc_id         TEXT PRIMARY KEY,
+        file_name      TEXT NOT NULL,
+        reason         TEXT NOT NULL,
+        quarantined_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
     """
 ]
 
@@ -87,6 +95,11 @@ def load_file(conn, path):
         return 0
 
     df = parse(path)
+
+    problems = validate(df)
+    if problems:
+        raise ValueError("; ".join(problems))
+    
     for col in DATE_COLUMNS:
         df[col] = df[col].dt.date
     df = df.astype(object).where(df.notna(), None)
@@ -105,12 +118,25 @@ def load_file(conn, path):
             cur.executemany(insert_sql, df.itertuples(index=False, name=None))
             events = parse_events(path)
             events.insert(0, "doc_id", doc_id)
+            conn.execute("DELETE FROM quarantine WHERE doc_id = %s", (doc_id,))
             cur.executemany(
                 "INSERT INTO project_events (doc_id, project_id, event) VALUES (%s, %s, %s)",
                 events.itertuples(index=False, name=None),
             )
 
     return len(df)
+
+def quarantine(conn, path, reason):
+    _, doc_id, _ = path.stem.split("_", 2)
+    conn.execute(
+        """
+        INSERT INTO quarantine (doc_id, file_name, reason)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (doc_id)
+        DO UPDATE SET reason = EXCLUDED.reason, quarantined_at = now()
+        """,
+        (doc_id, path.name, reason),
+    )
 
 
 if __name__ == "__main__":
@@ -119,8 +145,13 @@ if __name__ == "__main__":
     )
     conn = connect()
     for path in files:
-        count = load_file(conn, path)
-        print(f"{path.name}: {count} rows loaded")
+        try:
+            count = load_file(conn, path)
+            if count:
+                print(f"{path.name}: {count} rows loaded")
+        except Exception as error:
+            quarantine(conn, path, str(error))
+            print(f"QUARANTINED {path.name}: {error}")
 
     total = conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
     print("Total rows in projects table:", total)

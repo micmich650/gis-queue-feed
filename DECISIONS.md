@@ -72,3 +72,22 @@
 - Values are passed with `%s` placeholders, never pasted into SQL text.
 - The connection string comes from the DATABASE_URL environment variable,
   with a local default.
+
+## Comparing months
+- New and removed projects are found with LEFT JOIN anti-joins between two
+  files' rows in the same `projects` table.
+- October check: 1,758 (Sep) − 65 removed + 43 new = 1,736 (Oct). The counts
+  reconcile exactly.
+- Removed projects are labelled using ERCOT's Cancellation, Inactive and
+  Commissioning sheets (stored in `project_events`). In October: 53 cancelled,
+  8 commissioned, 2 inactive, 2 unexplained (25INR0220 Hector Solar,
+  28INR0043 Sendero Solar). Still investigating those two.
+- The Commissioning sheet can list a project more than once (different
+  categories), so events are de-duplicated before loading.
+- The header search now checks every column for "INR", because in
+  Commissioning Update the INR column isn't first.
+- Lesson: when loading code changes, already-loaded files are skipped and
+  never reprocessed. I had to truncate and reload. A "reload" option would
+  fix this properly.
+- The Large Gen sheet uses fuel codes (SOL, WIN, ...), while the event sheets
+  use full names. The report will need a mapping.

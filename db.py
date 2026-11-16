@@ -50,6 +50,17 @@ SCHEMA = [
         event      TEXT NOT NULL,
         PRIMARY KEY (doc_id, project_id, event)
     )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS change_events (
+        prev_doc_id TEXT NOT NULL REFERENCES files (doc_id),
+        cur_doc_id  TEXT NOT NULL REFERENCES files (doc_id),
+        project_id  TEXT NOT NULL,
+        change_type TEXT NOT NULL,
+        old_value   TEXT,
+        new_value   TEXT,
+        PRIMARY KEY (prev_doc_id, cur_doc_id, project_id, change_type)
+    )
     """
 ]
 

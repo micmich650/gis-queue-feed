@@ -154,7 +154,7 @@ if __name__ == "__main__":
             count = load_file(conn, path)
             if count:
                 print(f"{path.name}: {count} rows loaded")
-        except Exception as error:
+        except Exception as error: # noqa: BLE001 - any failure quarantines the file
             quarantine(conn, path, str(error))
             print(f"QUARANTINED {path.name}: {error}")
 

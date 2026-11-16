@@ -39,7 +39,9 @@ def project_row(project_id):
 def write_workbook(path, sheets):
     with pd.ExcelWriter(path) as writer:
         for name, rows in sheets.items():
-            pd.DataFrame(rows).to_excel(
+            width = max(len(row) for row in rows)
+            padded = [row + [None] * (width - len(row)) for row in rows]
+            pd.DataFrame(padded).to_excel(
                 writer, sheet_name=name, header=False, index=False
             )
 

@@ -2,7 +2,6 @@ from itertools import pairwise
 
 from db import connect
 
-
 CHANGE_QUERIES = {
     "added": """
         INSERT INTO change_events (prev_doc_id, cur_doc_id, project_id, change_type)

@@ -154,3 +154,11 @@
   failure quarantines the file; marked with a noqa comment explaining why.
 - Ruff's suggestion on the newest-file lookup also revealed that parse.py's
   demo didn't skip Excel lock files; fixed.
+
+## Tests
+- 14 tests: parsing (header search, missing columns, old format, "no
+  cancellations" notes), validation, report formatting, and change detection.
+- Each parsing test builds a tiny Excel file recreating a real situation
+  from ERCOT's data.
+- Change detection is tested against a separate `queue_test` database, so
+  tests never touch real data. Those tests are skipped if it isn't running.

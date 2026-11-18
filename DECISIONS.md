@@ -1,5 +1,7 @@
 # Decisions
 
+Working notes I kept while building this, roughly in the order things came up.
+
 ## Finding the data
 - The GIS report page loads its file list with JavaScript, so the links
   aren't in the HTML. I found the JSON feed the page uses
@@ -22,14 +24,15 @@
   read the lock file and crashes.
 
 ## Parsing the report
-- The project list is on the "Project Details - Large Gen" sheet.
-  Small Gen is out of scope for now.
+- The project list is on the "Project Details - Large Gen" sheet
+  ("Project Details" in older reports). Small Gen is out of scope for now.
 - The header row isn't in a fixed place (row 30 in Large Gen, row 14 in
-  Small Gen), so I search for the row whose first cell is "INR" instead of
-  hard-coding a row number. If no such row exists, parsing fails with a
-  clear error naming the file and sheet.
-- I keep 12 of the 31 columns and rename them to snake_case in one
-  dictionary (`COLUMNS`). If ERCOT renames a column, it's a one-line fix,
+  Small Gen), so I search the sheet for the cell "INR" instead of
+  hard coding a row number. It checks every column, because in the
+  Commissioning Update sheet INR isn't the first column. If no header is
+  found, parsing fails with a clear error naming the file and sheet.
+- I keep 12 of the 31 columns and rename them to user friendly names in one
+  dictionary (`COLUMNS`). If ERCOT renames a column, it's a one line fix,
   and the rest of the code is unaffected.
 - Rows with no INR are dropped (blank rows above and below the data).
 - Project IDs are converted to text and stripped of spaces. Text columns
@@ -50,47 +53,41 @@
 - Capacity can legitimately be negative for modification projects
   (per ERCOT's notes), so validation shouldn't reject negative MW.
 - The report has Cancellation Update, Inactive Projects and Commissioning
-  Update sheets. When a project disappears between months, I can use these
+  Update sheets. When a project disappears between months, I use these
   to label why: cancelled, inactive, or now operating, and flag anything
   else as unexplained.
 
 ## Database
 - Using Postgres (in Docker) rather than SQLite, because it's what
-  Grid Status uses and it has real DATE and NUMERIC types.
-- Planning `NUMERIC` for capacity instead of a float, so decimals are
-  stored exactly and don't create fake capacity changes between months.
-- Two tables: `files` (one row per report) and `projects` (one row per
-  project per report). Keeping a snapshot per month is what makes
+  Grid Status uses
+- `NUMERIC` for capacity instead of a float, so decimals are stored exactly
+  and don't create fake capacity changes between months.
+- Five tables: `files` (one row per report), `projects` (one row per
+  project per report), `project_events` (cancelled/inactive/commissioned),
+  `change_events` (differences between months) and `quarantine` (files that
+  failed). Keeping a snapshot of `projects` per month is what makes
   comparing months possible.
 - `projects` has a composite primary key (doc_id, project_id): a project
   can appear once per file, never twice in the same file.
 - `doc_id` references `files`, so every project row records its source file.
-- Each file is loaded in one transaction: the file row and all project rows
-  are saved together or not at all. A crash halfway can't leave a file
-  marked as loaded with missing projects.
+- Each file is loaded in one transaction: the file row, project rows and
+  events are saved together or not at all. A crash halfway can't leave a
+  file marked as loaded with missing projects
 - Re-running is safe: files already in `files` are skipped.
-- Values are passed with `%s` placeholders, never pasted into SQL text.
-- The connection string comes from the DATABASE_URL environment variable,
-  with a local default.
+- Values are passed with `%s` placeholders, never pasted into SQL text
 
 ## Comparing months
-- New and removed projects are found with LEFT JOIN anti-joins between two
+- New and removed projects are found with LEFT JOIN anti joins between two
   files' rows in the same `projects` table.
 - October check: 1,758 (Sep) − 65 removed + 43 new = 1,736 (Oct). The counts
   reconcile exactly.
 - Removed projects are labelled using ERCOT's Cancellation, Inactive and
   Commissioning sheets (stored in `project_events`). In October: 53 cancelled,
   8 commissioned, 2 inactive, 2 unexplained (25INR0220 Hector Solar,
-  28INR0043 Sendero Solar). Still investigating those two.
+  28INR0043 Sendero Solar). I couldn't find a reason for those two anywhere
+  in the report.
 - The Commissioning sheet can list a project more than once (different
   categories), so events are de-duplicated before loading.
-- The header search now checks every column for "INR", because in
-  Commissioning Update the INR column isn't first.
-- Lesson: when loading code changes, already-loaded files are skipped and
-  never reprocessed. I had to truncate and reload. A "reload" option would
-  fix this properly.
-- The Large Gen sheet uses fuel codes (SOL, WIN, ...), while the event sheets
-  use full names. The report will need a mapping.
 
 ## Change detection
 - All change types are saved to one `change_events` table, with old and
@@ -98,7 +95,8 @@
   Trade-off: no date math directly on those columns.
 - Each comparison deletes its previous results and re-inserts them in one
   transaction, so re-running is safe and picks up query improvements.
-- Months are paired automatically (each file with the next by publish date).
+- Months are paired automatically (each file with the next by publish date,
+  with corrections handled as described below).
 - IS DISTINCT FROM is used instead of <> so changes to or from NULL aren't missed.
 - A removed project's reasons are combined with STRING_AGG, so a project on
   two event sheets still gets exactly one row.
@@ -114,28 +112,24 @@
   MW or unusual IDs (both are legitimate in ERCOT's data).
 - Files that fail go to a `quarantine` table with the reason. The run
   continues with the other files instead of crashing.
-- Quarantine uses an upsert (ON CONFLICT DO UPDATE), so re-runs update the
+- Quarantine uses an upsert (ON CONFLICT DO UPDATE), so re runs update the
   reason instead of duplicating it. A file that later loads successfully is
   removed from quarantine in the same transaction.
-- The main loop catches any exception on purpose: at the top level of a
-  pipeline, recording a failure is better than crashing.
-- Tested with a copy of a real file with a renamed column.
 
 ## Backfill scope
-- Loaded every GIS report. Reports from Feb 2022 onward (new layout) load
-  cleanly. Reports from Oct 2019 to Jan 2022 use an older layout.
+- Downloaded every GIS report. Reports from Feb 2022 onward (new layout)
+  load cleanly. Reports from Dec 2018 to Jan 2022 use an older layout.
 - Handled in the parser: old sheet name ("Project Details"), renamed column
   ("GINR Study Phase"), and "no events this month" notes in event sheets.
-- Not supported (scoped out): 19 old files have dates stored as text; six old
-  reports share one publish date (2020-06-29), so publish date can't order
-  them; there are revised/corrected re-publications of the same month; and
-  there are gaps between reports.
-- The format boundary itself is consistent: 761 projects (Jan 2022) -> 788
-  (Feb 2022), so the two formats count projects the same way.
+- Not supported (scoped out): 18 old files have dates stored as text and one
+  has no Cancellation Update sheet; many old reports were re-published on
+  the same day (2020-06-29), so publish date can't order them; there are
+  corrected re-publications of the same month; and there are gaps between
+  reports.
 - Decision: compare months from Feb 2022 onward (nearly 5 years). Supporting
   older reports needs ordering by report month parsed from inconsistent file
-  names; that's the documented next step.
-  - Scope is enforced in code: files published before 2022-03-01 are skipped
+  names.
+- Scope is enforced in code: files published before 2022-03-01 are skipped
   and logged as "out of scope", not quarantined.
 - Corrections: a file published within 15 days of the previous one replaces
   it in comparisons. This caught April 2022 and June 2023 corrections.
@@ -148,12 +142,16 @@
 - Finding: the queue grew from 788 to a peak of 1,881 (July 2025) and has
   shrunk since; removals have regularly outnumbered additions since late 2025.
 
+## Report
+- The report month is worked out from the publish date (reports come out
+  at the start of the following month), not from the inconsistent file names.
+- Each section only shows the columns that make sense for that change type.
+  "Old" and "New" don't mean anything for a new or removed project.
+- Fuel codes (SOL, WIN, ...) are shown as readable names. Codes I wasn't sure
+  about are shown as-is rather than guessed. Most batteries are coded `OTH`.
+
 ## Code quality
-- Ruff for linting and formatting. Accepted its suggestions (pairwise, max)
-  except one: the main loop deliberately catches all exceptions so any
-  failure quarantines the file; marked with a noqa comment explaining why.
-- Ruff's suggestion on the newest-file lookup also revealed that parse.py's
-  demo didn't skip Excel lock files; fixed.
+- Ruff for linting and formatting
 
 ## Tests
 - 14 tests: parsing (header search, missing columns, old format, "no
